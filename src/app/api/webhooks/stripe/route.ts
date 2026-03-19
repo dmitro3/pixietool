@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { organizations, orgMembers, users } from "@/server/db/schema";
 import { logger } from "@/server/lib/logger";
+import { logWebhookEvent } from "@/server/lib/webhook-log";
 import { sendPaymentFailedEmail } from "@/server/services/email/client";
 
 function getStripe() {
@@ -173,6 +174,14 @@ export async function POST(request: Request) {
     default:
       logger.debug("Unhandled Stripe event", { type: event.type });
   }
+
+  // Log to webhook event viewer
+  logWebhookEvent({
+    source: "stripe",
+    eventType: event.type,
+    status: "success",
+    payload: JSON.stringify(event.data.object).slice(0, 500),
+  });
 
   return NextResponse.json({ received: true });
 }

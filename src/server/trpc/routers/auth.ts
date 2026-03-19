@@ -6,6 +6,7 @@ import {
   protectedProcedure,
 } from "../trpc";
 import { users, organizations, orgMembers } from "@/server/db/schema";
+import { getWebhookEvents } from "@/server/lib/webhook-log";
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(async ({ ctx }) => {
@@ -59,6 +60,43 @@ export const authRouter = createTRPCRouter({
       });
 
       return org;
+    }),
+
+  inviteMember: protectedProcedure
+    .input(
+      z.object({
+        orgId: z.string().uuid(),
+        email: z.string().email(),
+        role: z.enum(["admin", "editor", "viewer"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Check if user exists
+      const [existingUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.email, input.email))
+        .limit(1);
+
+      if (existingUser) {
+        // Add directly to org
+        await ctx.db.insert(orgMembers).values({
+          orgId: input.orgId,
+          userId: existingUser.id,
+          role: input.role,
+        });
+        return { status: "added", email: input.email };
+      }
+
+      // User doesn't exist yet — in production, send an invite email via Resend
+      // For now, return pending status
+      return { status: "invited", email: input.email };
+    }),
+
+  webhookLog: protectedProcedure
+    .input(z.object({ limit: z.number().min(1).max(200).default(50) }).optional())
+    .query(({ input }) => {
+      return getWebhookEvents(input?.limit ?? 50);
     }),
 
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {

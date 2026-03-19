@@ -8,6 +8,11 @@ import {
   generateBatch,
 } from "@/server/services/content/generator";
 import { repurposeContent } from "@/server/services/content/waterfall";
+import {
+  CONTENT_TEMPLATES,
+  getTemplatesByPlatform,
+  getTemplateById,
+} from "@/server/services/content/template-library";
 
 const platformEnum = z.enum([
   "linkedin",
@@ -338,5 +343,65 @@ export const contentRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
       return { success: true };
+    }),
+
+  // ─── Templates ──────────────────────────────────────
+
+  templates: protectedProcedure
+    .input(z.object({ platform: z.string().optional() }).optional())
+    .query(({ input }) => {
+      if (input?.platform) {
+        return getTemplatesByPlatform(input.platform);
+      }
+      return CONTENT_TEMPLATES;
+    }),
+
+  templateById: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const template = getTemplateById(input.id);
+      if (!template) throw new TRPCError({ code: "NOT_FOUND" });
+      return template;
+    }),
+
+  exportCsv: protectedProcedure
+    .input(z.object({ brandId: z.string().uuid(), status: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conditions = [eq(contentItems.brandId, input.brandId)];
+      if (input.status) {
+        conditions.push(eq(contentItems.status, input.status as "draft" | "pending_review" | "approved" | "scheduled" | "published" | "failed"));
+      }
+
+      const items = await ctx.db
+        .select({
+          id: contentItems.id,
+          platform: contentItems.platform,
+          contentType: contentItems.contentType,
+          status: contentItems.status,
+          textContent: contentItems.textContent,
+          hashtags: contentItems.hashtags,
+          scheduledFor: contentItems.scheduledFor,
+          publishedAt: contentItems.publishedAt,
+          createdAt: contentItems.createdAt,
+        })
+        .from(contentItems)
+        .where(and(...conditions))
+        .orderBy(desc(contentItems.createdAt));
+
+      // Build CSV string
+      const headers = ["id", "platform", "type", "status", "text", "hashtags", "scheduled", "published", "created"];
+      const rows = items.map((item) => [
+        item.id,
+        item.platform,
+        item.contentType,
+        item.status,
+        `"${(item.textContent ?? "").replace(/"/g, '""')}"`,
+        (item.hashtags ?? []).join(";"),
+        item.scheduledFor?.toISOString() ?? "",
+        item.publishedAt?.toISOString() ?? "",
+        item.createdAt.toISOString(),
+      ]);
+
+      return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     }),
 });
