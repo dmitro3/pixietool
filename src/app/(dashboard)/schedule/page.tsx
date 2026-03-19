@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { useBrandStore } from "@/hooks/use-brand";
+import { toast } from "sonner";
 
 import {
   Card,
@@ -20,9 +21,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  CalendarDays,
   Linkedin,
   Globe,
+  GripVertical,
 } from "lucide-react";
 
 const PLATFORM_ICONS: Record<string, typeof Linkedin> = {
@@ -42,7 +43,6 @@ function getCalendarDays(year: number, month: number) {
 
   const days: { date: Date; currentMonth: boolean }[] = [];
 
-  // Previous month trailing days
   for (let i = firstDay - 1; i >= 0; i--) {
     days.push({
       date: new Date(year, month - 1, daysInPrevMonth - i),
@@ -50,15 +50,10 @@ function getCalendarDays(year: number, month: number) {
     });
   }
 
-  // Current month
   for (let d = 1; d <= daysInMonth; d++) {
-    days.push({
-      date: new Date(year, month, d),
-      currentMonth: true,
-    });
+    days.push({ date: new Date(year, month, d), currentMonth: true });
   }
 
-  // Next month leading days (fill to 42 cells = 6 rows)
   const remaining = 42 - days.length;
   for (let d = 1; d <= remaining; d++) {
     days.push({
@@ -83,8 +78,12 @@ export default function SchedulePage() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const dragRef = useRef<string | null>(null);
 
-  // Fetch scheduled + approved content
+  const utils = trpc.useUtils();
+
   const { data: scheduledItems, isLoading } = trpc.content.list.useQuery(
     { brandId: activeBrandId!, status: "scheduled", limit: 100 },
     { enabled: !!activeBrandId }
@@ -99,6 +98,16 @@ export default function SchedulePage() {
     { brandId: activeBrandId!, status: "published", limit: 100 },
     { enabled: !!activeBrandId }
   );
+
+  const reschedule = trpc.content.update.useMutation({
+    onSuccess: () => {
+      utils.content.list.invalidate();
+      toast.success("Post rescheduled");
+    },
+    onError: (err) => {
+      toast.error(`Reschedule failed: ${err.message}`);
+    },
+  });
 
   const allItems = useMemo(() => {
     return [
@@ -122,36 +131,89 @@ export default function SchedulePage() {
   }
 
   function prevMonth() {
-    if (month === 0) {
-      setMonth(11);
-      setYear(year - 1);
-    } else {
-      setMonth(month - 1);
-    }
+    if (month === 0) { setMonth(11); setYear(year - 1); }
+    else { setMonth(month - 1); }
   }
 
   function nextMonth() {
-    if (month === 11) {
-      setMonth(0);
-      setYear(year + 1);
-    } else {
-      setMonth(month + 1);
-    }
+    if (month === 11) { setMonth(0); setYear(year + 1); }
+    else { setMonth(month + 1); }
   }
+
+  // ─── Drag & Drop Handlers ─────────────────────────────
+
+  const handleDragStart = useCallback((e: React.DragEvent, itemId: string, status: string) => {
+    // Only allow dragging scheduled/approved items (not published)
+    if (status === "published") {
+      e.preventDefault();
+      return;
+    }
+    dragRef.current = itemId;
+    setDragItemId(itemId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", itemId);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, dateKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTarget(dateKey);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropTarget(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    setDropTarget(null);
+    setDragItemId(null);
+
+    const itemId = dragRef.current;
+    if (!itemId) return;
+    dragRef.current = null;
+
+    // Find the item to get its current time
+    const item = allItems.find((i) => i.id === itemId);
+    if (!item) return;
+
+    // Preserve the original time, just change the date
+    const oldDate = item.scheduledFor ? new Date(item.scheduledFor) : new Date();
+    const newDate = new Date(targetDate);
+    newDate.setHours(oldDate.getHours(), oldDate.getMinutes(), 0, 0);
+
+    // Don't reschedule to the past
+    if (newDate < new Date()) {
+      toast.error("Cannot schedule in the past");
+      return;
+    }
+
+    reschedule.mutate({
+      id: itemId,
+      scheduledFor: newDate.toISOString(),
+      status: "scheduled",
+    });
+  }, [allItems, reschedule]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragItemId(null);
+    setDropTarget(null);
+    dragRef.current = null;
+  }, []);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">Schedule</h1>
           <p className="text-muted-foreground">
-            Your content calendar and publishing schedule.
+            Drag and drop posts to reschedule. Your content calendar.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <BrandSelector />
           <CreateContentDialog>
-            <Button className="gap-2">
+            <Button className="gap-2 pixie-gradient border-0 text-white hover:opacity-90">
               <Plus className="h-4 w-4" />
               Schedule Post
             </Button>
@@ -167,9 +229,9 @@ export default function SchedulePage() {
           </CardHeader>
         </Card>
       ) : (
-        <Card>
+        <Card className="pixie-card">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-4">
                 <Button variant="outline" size="icon" onClick={prevMonth}>
                   <ChevronLeft className="h-4 w-4" />
@@ -193,6 +255,10 @@ export default function SchedulePage() {
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-yellow-500" />
                   Approved
+                </span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <GripVertical className="h-3 w-3" />
+                  Drag to reschedule
                 </span>
               </div>
             </div>
@@ -219,13 +285,20 @@ export default function SchedulePage() {
                   {calendarDays.map((day, i) => {
                     const dayItems = getItemsForDay(day.date);
                     const isToday = isSameDay(day.date, today);
+                    const dateKey = day.date.toISOString().slice(0, 10);
+                    const isDropping = dropTarget === dateKey;
 
                     return (
                       <div
                         key={i}
-                        className={`min-h-[100px] border-b border-r p-1.5 ${
+                        className={`min-h-[100px] border-b border-r p-1.5 transition-colors ${
                           !day.currentMonth ? "bg-muted/30" : ""
-                        } ${i % 7 === 0 ? "border-l" : ""}`}
+                        } ${i % 7 === 0 ? "border-l" : ""} ${
+                          isDropping ? "bg-primary/10 ring-2 ring-primary/30 ring-inset" : ""
+                        }`}
+                        onDragOver={(e) => handleDragOver(e, dateKey)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, day.date)}
                       >
                         <div
                           className={`text-xs font-medium mb-1 ${
@@ -248,13 +321,27 @@ export default function SchedulePage() {
                                 : item.status === "scheduled"
                                   ? "bg-primary"
                                   : "bg-yellow-500";
+                            const isDragging = dragItemId === item.id;
+                            const canDrag = item.status !== "published";
 
                             return (
                               <div
                                 key={item.id}
-                                className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] bg-accent/50 truncate"
-                                title={item.textContent?.slice(0, 100) ?? ""}
+                                draggable={canDrag}
+                                onDragStart={(e) => handleDragStart(e, item.id, item.status)}
+                                onDragEnd={handleDragEnd}
+                                className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] truncate transition-all ${
+                                  canDrag ? "cursor-grab active:cursor-grabbing hover:bg-accent" : ""
+                                } ${
+                                  isDragging
+                                    ? "opacity-40 ring-1 ring-primary/50"
+                                    : "bg-accent/50"
+                                }`}
+                                title={`${item.textContent?.slice(0, 100) ?? ""}${canDrag ? " — drag to reschedule" : ""}`}
                               >
+                                {canDrag && (
+                                  <GripVertical className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50" />
+                                )}
                                 <span
                                   className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`}
                                 />
@@ -305,7 +392,7 @@ export default function SchedulePage() {
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 rounded-lg border p-3"
+                      className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors"
                     >
                       <PlatformIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">

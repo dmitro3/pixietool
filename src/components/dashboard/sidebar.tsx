@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -54,6 +55,9 @@ export function Sidebar() {
             Pixie Social
           </span>
         </Link>
+        <div className="ml-auto">
+          <NotificationBell />
+        </div>
       </div>
 
       <ScrollArea className="flex-1 px-3 py-4">

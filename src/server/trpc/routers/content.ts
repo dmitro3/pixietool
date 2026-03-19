@@ -310,13 +310,18 @@ export const contentRouter = createTRPCRouter({
         mediaUrls: z.array(z.string()).optional(),
         hashtags: z.array(z.string()).optional(),
         contentPillar: z.string().optional(),
+        scheduledFor: z.string().datetime().optional(),
+        status: z.enum(["draft", "pending_review", "approved", "scheduled"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
+      const { id, scheduledFor, ...data } = input;
       const [updated] = await ctx.db
         .update(contentItems)
-        .set(data)
+        .set({
+          ...data,
+          ...(scheduledFor ? { scheduledFor: new Date(scheduledFor) } : {}),
+        })
         .where(eq(contentItems.id, id))
         .returning();
       return updated;
