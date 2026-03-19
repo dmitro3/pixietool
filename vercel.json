@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "SKIP_ENV_VALIDATION=true npm run build",
+  "installCommand": "npm ci",
+  "regions": ["iad1"],
+  "crons": [],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/ingest/static/:path*",
+      "destination": "https://us-assets.i.posthog.com/static/:path*"
+    }
+  ]
+}

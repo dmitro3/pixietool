@@ -17,6 +17,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "workers": "npx tsx workers/index.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "validate": "npm run type-check && npm run lint && npm run test"
   },
   "dependencies": {
@@ -62,6 +64,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.18.0",

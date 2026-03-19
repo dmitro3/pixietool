@@ -5,7 +5,7 @@ import {
   publicProcedure,
   protectedProcedure,
 } from "../trpc";
-import { users } from "@/server/db/schema";
+import { users, organizations, orgMembers } from "@/server/db/schema";
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(async ({ ctx }) => {
@@ -38,6 +38,27 @@ export const authRouter = createTRPCRouter({
         .where(eq(users.id, ctx.user.id))
         .returning();
       return updated;
+    }),
+
+  createOrg: protectedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const [org] = await ctx.db
+        .insert(organizations)
+        .values({
+          name: input.name,
+          ownerId: ctx.user.id,
+        })
+        .returning();
+
+      // Add the creator as owner member
+      await ctx.db.insert(orgMembers).values({
+        orgId: org.id,
+        userId: ctx.user.id,
+        role: "owner",
+      });
+
+      return org;
     }),
 
   completeOnboarding: protectedProcedure.mutation(async ({ ctx }) => {
