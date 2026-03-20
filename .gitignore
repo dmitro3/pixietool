@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Pixiecore (separate tool)
 pixiecore/
+
+# Demo screenshots
+*.png
+
+# Playwright MCP logs
+.playwright-mcp/
