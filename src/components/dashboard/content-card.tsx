@@ -189,6 +189,49 @@ export function ContentCard({ item }: { item: ContentItem }) {
         )}
       </CardContent>
 
+      {/* Approval actions for pending_review items */}
+      {(item.status === "pending_review" || item.status === "draft") && (
+        <div className="px-6 pb-3 flex items-center gap-2">
+          <Button
+            size="sm"
+            className="gap-1.5 pixie-gradient border-0 text-white hover:opacity-90"
+            onClick={() => {
+              updateStatus.mutate({ id: item.id, status: "approved" });
+              toast.success("Content approved");
+            }}
+            disabled={updateStatus.isPending}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => {
+              updateStatus.mutate({ id: item.id, status: "draft" });
+              toast("Sent back to draft");
+            }}
+            disabled={updateStatus.isPending || item.status === "draft"}
+          >
+            <Edit className="h-3.5 w-3.5" />
+            Revise
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 text-destructive hover:text-destructive"
+            onClick={() => {
+              deleteContent.mutate({ id: item.id });
+            }}
+            disabled={deleteContent.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Reject
+          </Button>
+        </div>
+      )}
+
       <CardFooter className="pt-0 text-xs text-muted-foreground gap-3">
         {item.createdBy === "ai" ? (
           <span className="flex items-center gap-1">

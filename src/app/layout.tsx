@@ -17,9 +17,32 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pixie Social — AI Social Media Manager",
+  title: {
+    default: "Pixie Social — AI Social Media Manager",
+    template: "%s | Pixie Social",
+  },
   description:
-    "Your autonomous AI social media strategist, content creator, and distribution engine.",
+    "Your autonomous AI social media strategist, content creator, and distribution engine. Generate, schedule, and publish content across LinkedIn, X, and Instagram.",
+  keywords: ["social media", "AI", "content creation", "scheduling", "LinkedIn", "analytics", "engagement"],
+  authors: [{ name: "Pixiedust" }],
+  creator: "Pixiedust",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "Pixie Social",
+    title: "Pixie Social — AI Social Media Manager",
+    description: "Your autonomous AI social media strategist. Generate, schedule, and publish content across all platforms.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pixie Social — AI Social Media Manager",
+    description: "Your autonomous AI social media strategist. Generate, schedule, and publish content across all platforms.",
+    creator: "@pixiedust",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
